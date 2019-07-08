@@ -504,11 +504,11 @@ export interface MonitorPageTitle {
 }
 
 export interface CoalescedTimelineEvent {
-  start: string;
+  start: number;
 
-  end: string;
+  end: number;
 
-  locations: string;
+  locations: string[];
 
   status: string;
 }

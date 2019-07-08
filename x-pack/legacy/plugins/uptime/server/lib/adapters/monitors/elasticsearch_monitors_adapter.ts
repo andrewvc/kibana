@@ -16,6 +16,7 @@ import {
   MonitorSeriesPoint,
   Ping,
   LocationDurationLine,
+  CoalescedTimelineEvent,
 } from '../../../../common/graphql/types';
 import {
   dropLatestBucket,
@@ -25,6 +26,7 @@ import {
 } from '../../helper';
 import { DatabaseAdapter } from '../database';
 import { UMMonitorsAdapter } from './adapter_types';
+import DateMath from '@elastic/datemath';
 
 const formatStatusBuckets = (time: any, buckets: any, docCount: any) => {
   let up = null;
@@ -247,11 +249,15 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     dateRangeEnd: string,
     monitorId: string
   ) {
+
+    // TODO figure out the best size here
+    const cssTermsSize = 5;
+
     const body = {
       query: {
         bool: {
           filter: [
-            {match: {"monitor.id": monitorId}},
+            { match: { 'monitor.id': monitorId } },
             {
               range: {
                 '@timestamp': {
@@ -277,9 +283,13 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                 missing: 'N/A',
               },
               aggs: {
+                css_count: {
+                  value_count: { field: 'summary.continuous_status_segment' },
+                },
                 css_start: {
                   terms: {
                     field: 'summary.continuous_status_segment',
+                    size: cssTermsSize,
                     order: {
                       _key: 'asc',
                     },
@@ -295,11 +305,15 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                         field: 'summary.down',
                       },
                     },
+                    last: {
+                      max: { field: '@timestamp' },
+                    },
                   },
                 },
                 css_end: {
                   terms: {
                     field: 'summary.continuous_status_segment',
+                    size: cssTermsSize,
                     order: {
                       _key: 'desc',
                     },
@@ -315,6 +329,9 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                         field: 'summary.down',
                       },
                     },
+                    last: {
+                      max: { field: '@timestamp' },
+                    },
                   },
                 },
               },
@@ -328,10 +345,87 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
 
     console.log('PARAMS ARE', JSON.stringify(params, null, 2));
 
-    const result = this.database.search(request, params);
-    console.log(result);
+    const result = await this.database.search(request, params);
 
-    return [];
+    const coalesceLinear = (timeline: CoalescedTimelineEvent[]): CoalescedTimelineEvent[] => {
+      const result: CoalescedTimelineEvent[] = [];
+      let last: (CoalescedTimelineEvent | null) = null;
+      timeline.forEach(cte => {
+        if (!last) {
+          console.log("FIRST");
+          last = cte;
+          result.push(cte);
+          return;
+        }
+
+        console.log(cte.start, last.start)
+        if (cte.start === last.start) {
+          console.log("EXTEND");
+          last.end = cte.end;
+          return;
+        } 
+
+        console.log("NEW");
+        last = cte;
+        result.push(cte);
+      });
+      return result;
+    };
+
+    const dateHistBuckets = get<any[]>(result, 'aggregations.dateHist.buckets', []);
+    const locationTimelines: {[key: string]: CoalescedTimelineEvent[]} = {};
+    dateHistBuckets.forEach((dateHistBucket: any, dateIdx: number) => {
+      const isFirstBucket = dateIdx == 0;
+      const isLastBucket = dateIdx == dateHistBuckets.length;
+      const bucketStartedAt = isFirstBucket ? DateMath.parse(dateRangeStart) : dateHistBucket.key;
+      const bucketEndedAt = isLastBucket
+        ? DateMath.parse(dateRangeEnd)
+        : dateHistBuckets[dateIdx + 1];
+
+      const locationBuckets = get<any[]>(dateHistBucket, 'location.buckets', []);
+      locationBuckets.forEach(locationBucket => {
+        const location: string = locationBucket.key;
+        let timeline: CoalescedTimelineEvent[] = [];
+        const cssCount = get<number>(locationBucket, 'css_count.value', 0);
+        const cssStartBuckets = get<any[]>(locationBucket, 'css_start.buckets', []);
+        const cssEndBuckets = get<any[]>(locationBucket, 'css_end.buckets', []);
+
+        //TODO we need to ship interval data with heartbeat to calculate this accurately
+        const checkInterval = 10000; // 10s
+
+        const cssBucketToCTE = (cssBucket: any): CoalescedTimelineEvent => {
+          const status: string =
+            cssBucket.up.value > 0 ? (cssBucket.down.value == 0 ? 'up' : 'mixed') : 'down';
+          return {
+            start: Date.parse(cssBucket.key),
+            end: cssBucket.last.value+ checkInterval,
+            locations: [location],
+            status: status,
+          };
+        };
+
+        const startCTEs = cssStartBuckets.map(cssBucketToCTE);
+        const endCTEs = cssEndBuckets.map(cssBucketToCTE);
+        timeline = timeline.concat(startCTEs);
+        if (cssCount > cssTermsSize*2) {
+          timeline.push({
+            start: startCTEs[startCTEs.length-1].end,
+            end: endCTEs[endCTEs.length-1].start,
+            locations: [location],
+            status: 'chaos'
+          });
+        }
+        timeline = timeline.concat(endCTEs);
+
+        locationTimelines[location] = coalesceLinear(timeline);
+      });
+    });
+
+
+    console.log('RESULT IS', JSON.stringify(result, null, 2));
+    console.log('TIMELINE IS', JSON.stringify(locationTimelines, null, 2));
+
+    return locationTimelines;
   }
 
   /**

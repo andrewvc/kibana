@@ -48,9 +48,9 @@ export const monitorsSchema = gql`
   }
 
   type CoalescedTimelineEvent {
-    start: String!
-    end: String!
-    locations: String!
+    start: Float!
+    end: Float!
+    locations: [String!]!
     status: String!
   }
 
