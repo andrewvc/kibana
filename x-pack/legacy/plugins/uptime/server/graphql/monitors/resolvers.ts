@@ -21,6 +21,8 @@ import {
   Snapshot,
   HistogramDataPoint,
   GetSnapshotHistogramQueryArgs,
+  CoalescedTimelineEvent,
+  GetCoalescedTimelineQueryArgs,
 } from '../../../common/graphql/types';
 import { UMServerLibs } from '../../lib/lib';
 import { CreateUMGraphQLResolvers, UMContext } from '../types';
@@ -47,6 +49,15 @@ export type UMLatestMonitorsResolver = UMResolver<
   GetLatestMonitorsQueryArgs,
   UMContext
 >;
+
+export type UMCoalescedTimelineResolver = UMResolver<
+  CoalescedTimelineEvent[] | Promise<CoalescedTimelineEvent[]>,
+  any,
+  GetCoalescedTimelineQueryArgs,
+  UMContext
+>;
+
+
 
 export type UMGetMonitorChartsResolver = UMResolver<
   any | Promise<any>,
@@ -92,12 +103,19 @@ export const createMonitorsResolvers: CreateUMGraphQLResolvers = (
     getSnapshotHistogram: UMGetSnapshotHistogram;
     getMonitorChartsData: UMGetMonitorChartsResolver;
     getLatestMonitors: UMLatestMonitorsResolver;
+    getCoalescedTimeline: UMCoalescedTimelineResolver;
     getFilterBar: UMGetFilterBarResolver;
     getErrorsList: UMGetErrorsListResolver;
     getMonitorPageTitle: UMGetMontiorPageTitleResolver;
   };
 } => ({
   Query: {
+    async getCoalescedTimeline(resolver, { dateRangeStart, dateRangeEnd, monitorId }, {req}): Promise<any> {
+      const result = await libs.monitors.getCoalescedTimeline(req, dateRangeStart, dateRangeEnd, monitorId);
+      return {
+        timeline: result,
+      };
+    },
     async getMonitors(resolver, { dateRangeStart, dateRangeEnd, filters }, { req }): Promise<any> {
       const result = await libs.monitors.getMonitors(req, dateRangeStart, dateRangeEnd, filters);
       return {

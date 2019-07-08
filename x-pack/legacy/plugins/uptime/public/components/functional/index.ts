@@ -19,3 +19,4 @@ export { PingList } from './ping_list';
 export { Snapshot } from './snapshot';
 export { SnapshotHistogram } from './charts';
 export { SnapshotLoading } from './snapshot_loading';
+export { MonitorPageCoalescedTimeline } from './monitor_page_coalesced_timeline';

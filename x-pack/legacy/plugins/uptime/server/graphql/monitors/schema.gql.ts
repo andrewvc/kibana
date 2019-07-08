@@ -47,6 +47,13 @@ export const monitorsSchema = gql`
     y: Float
   }
 
+  type CoalescedTimelineEvent {
+    start: String!
+    end: String!
+    locations: String!
+    status: String!
+  }
+
   "Represents a bucket of monitor status information."
   type StatusData {
     "The timeseries point for this status data."
@@ -186,5 +193,14 @@ export const monitorsSchema = gql`
     getErrorsList(dateRangeStart: String!, dateRangeEnd: String!, filters: String): [ErrorListItem!]
 
     getMonitorPageTitle(monitorId: String!): MonitorPageTitle
+
+    getCoalescedTimeline(
+      "The lower limit of the date range."
+      dateRangeStart: String!
+      "The upper limit of the date range."
+      dateRangeEnd: String!
+      "Optional: a specific monitor ID filter."
+      monitorId: String
+    ): [CoalescedTimelineEvent!]!
   }
 `;

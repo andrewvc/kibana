@@ -18,6 +18,7 @@ import {
   MonitorPageTitle,
   MonitorStatusBar,
   PingList,
+  MonitorPageCoalescedTimeline,
 } from '../components/functional';
 import { UMUpdateBreadcrumbs } from '../lib/lib';
 import { UptimeSettingsContext } from '../contexts';
@@ -103,6 +104,15 @@ export const MonitorPage = ({
         dateRangeEnd={dateRangeEnd}
       />
       <EuiSpacer size="s" />
+      <MonitorPageCoalescedTimeline 
+      monitorId={monitorId}
+      dateRangeStart={dateRangeStart}
+      dateRangeEnd={dateRangeEnd}
+      variables={{
+        dateRangeStart: dateRangeStart,
+        dateRangeEnd: dateRangeEnd,
+        monitorId: monitorId
+      }} />
       <PingList
         onSelectedStatusUpdate={(selectedStatus: string | null) =>
           updateUrlParams({ selectedPingStatus: selectedStatus || '' })

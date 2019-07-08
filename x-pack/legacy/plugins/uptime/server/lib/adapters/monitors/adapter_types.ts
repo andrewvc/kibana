@@ -14,6 +14,12 @@ export interface UMMonitorsAdapter {
     dateRangeEnd: string,
     location?: string | null
   ): Promise<MonitorChart>;
+  getCoalescedTimeline(
+    request: any,
+    dateRangeStart: string,
+    dateRangeEnd: string,
+    monitorId: string
+  ): Promise<any>;
   getMonitors(
     request: any,
     dateRangeStart: string,

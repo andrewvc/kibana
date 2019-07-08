@@ -241,6 +241,99 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     return { up, down, total: up + down };
   }
 
+  public async getCoalescedTimeline(
+    request: any,
+    dateRangeStart: string,
+    dateRangeEnd: string,
+    monitorId: string
+  ) {
+    const body = {
+      query: {
+        bool: {
+          filter: [
+            {match: {"monitor.id": monitorId}},
+            {
+              range: {
+                '@timestamp': {
+                  gte: dateRangeStart,
+                  lte: dateRangeEnd,
+                },
+              },
+            },
+          ],
+        },
+      },
+      size: 0,
+      aggs: {
+        dateHist: {
+          auto_date_histogram: {
+            field: '@timestamp',
+            buckets: 10,
+          },
+          aggs: {
+            location: {
+              terms: {
+                field: 'observer.geo.name',
+                missing: 'N/A',
+              },
+              aggs: {
+                css_start: {
+                  terms: {
+                    field: 'summary.continuous_status_segment',
+                    order: {
+                      _key: 'asc',
+                    },
+                  },
+                  aggs: {
+                    up: {
+                      sum: {
+                        field: 'summary.up',
+                      },
+                    },
+                    down: {
+                      sum: {
+                        field: 'summary.down',
+                      },
+                    },
+                  },
+                },
+                css_end: {
+                  terms: {
+                    field: 'summary.continuous_status_segment',
+                    order: {
+                      _key: 'desc',
+                    },
+                  },
+                  aggs: {
+                    up: {
+                      sum: {
+                        field: 'summary.up',
+                      },
+                    },
+                    down: {
+                      sum: {
+                        field: 'summary.down',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const params = { index: INDEX_NAMES.HEARTBEAT, body: body };
+
+    console.log('PARAMS ARE', JSON.stringify(params, null, 2));
+
+    const result = this.database.search(request, params);
+    console.log(result);
+
+    return [];
+  }
+
   /**
    * Fetch the latest status for a monitors list
    * @param request Kibana request

@@ -13,3 +13,4 @@ export { monitorPageTitleQuery } from './monitor_page_title_query';
 export { monitorStatusBarQuery, monitorStatusBarQueryString } from './monitor_status_bar_query';
 export { pingsQuery, pingsQueryString } from './pings_query';
 export { snapshotQuery, snapshotQueryString } from './snapshot_query';
+export { coalescedTimelineQuery } from './monitor_page_coalesced_timeline_query';

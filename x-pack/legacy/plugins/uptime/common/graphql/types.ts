@@ -35,6 +35,8 @@ export interface Query {
   getErrorsList?: ErrorListItem[] | null;
 
   getMonitorPageTitle?: MonitorPageTitle | null;
+
+  getCoalescedTimeline: CoalescedTimelineEvent[];
   /** Fetches the current state of Uptime monitors for the given parameters. */
   getMonitorStates?: MonitorSummaryResult | null;
   /** Fetches details about the uptime index. */
@@ -500,6 +502,16 @@ export interface MonitorPageTitle {
 
   name?: string | null;
 }
+
+export interface CoalescedTimelineEvent {
+  start: string;
+
+  end: string;
+
+  locations: string;
+
+  status: string;
+}
 /** The primary object returned for monitor states. */
 export interface MonitorSummaryResult {
   /** The objects representing the state of a series of heartbeat monitors. */
@@ -746,6 +758,14 @@ export interface GetErrorsListQueryArgs {
 }
 export interface GetMonitorPageTitleQueryArgs {
   monitorId: string;
+}
+export interface GetCoalescedTimelineQueryArgs {
+  /** The lower limit of the date range. */
+  dateRangeStart: string;
+  /** The upper limit of the date range. */
+  dateRangeEnd: string;
+  /** Optional: a specific monitor ID filter. */
+  monitorId?: string | null;
 }
 export interface GetMonitorStatesQueryArgs {
   dateRangeStart: string;

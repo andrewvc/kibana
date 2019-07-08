@@ -28,6 +28,15 @@ export class UMMonitorsDomain {
     );
   }
 
+  public async getCoalescedTimeline(
+    request: any,
+    dateRangeStart: string,
+    dateRangeEnd: string,
+    monitorId: string,
+  ): Promise<any> {
+    return this.adapter.getCoalescedTimeline(request, dateRangeStart, dateRangeEnd, monitorId);
+  }
+
   public async getMonitors(
     request: any,
     dateRangeStart: string,
