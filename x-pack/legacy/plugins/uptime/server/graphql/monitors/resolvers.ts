@@ -110,11 +110,9 @@ export const createMonitorsResolvers: CreateUMGraphQLResolvers = (
   };
 } => ({
   Query: {
-    async getCoalescedTimeline(resolver, { dateRangeStart, dateRangeEnd, monitorId }, {req}): Promise<any> {
-      const result = await libs.monitors.getCoalescedTimeline(req, dateRangeStart, dateRangeEnd, monitorId);
-      return {
-        timeline: result,
-      };
+    async getCoalescedTimeline(resolver, { dateRangeStart, dateRangeEnd, monitorId }, {req}): Promise<CoalescedTimelineEvent[]> {
+      const result = await libs.monitors.getCoalescedTimeline(req, dateRangeStart, dateRangeEnd, monitorId!);
+      return result
     },
     async getMonitors(resolver, { dateRangeStart, dateRangeEnd, filters }, { req }): Promise<any> {
       const result = await libs.monitors.getMonitors(req, dateRangeStart, dateRangeEnd, filters);

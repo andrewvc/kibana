@@ -248,10 +248,10 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     dateRangeStart: string,
     dateRangeEnd: string,
     monitorId: string
-  ) {
+  ): Promise<CoalescedTimelineEvent[]> {
 
     // TODO figure out the best size here
-    const cssTermsSize = 5;
+    const cssTermsSize = 20;
 
     const body = {
       query: {
@@ -372,6 +372,30 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
       return result;
     };
 
+    const zipTimelines = (timelines: CoalescedTimelineEvent[][]): CoalescedTimelineEvent[] => {
+      const result: CoalescedTimelineEvent[] = [];
+
+      // Since the data is individually sorted we can just zip it together
+      while(timelines.length > 0) {
+        let lowestT: CoalescedTimelineEvent[] = [];
+        timelines.forEach( t => {
+          if (lowestT.length > 0) {
+            console.log("COMP", t[0].locations, t[0].start, lowestT[0].locations, lowestT[0].start);
+          }
+          if (lowestT.length === 0 || t[0].start < lowestT[0].start) {
+            lowestT = t
+          }
+        });
+
+        console.log("PUSH IT", lowestT)
+        result.push(lowestT.shift()!);
+
+        timelines = timelines.filter( t => t.length > 0)
+      }
+
+      return result;
+    };
+
     const dateHistBuckets = get<any[]>(result, 'aggregations.dateHist.buckets', []);
     const locationTimelines: {[key: string]: CoalescedTimelineEvent[]} = {};
     dateHistBuckets.forEach((dateHistBucket: any, dateIdx: number) => {
@@ -391,14 +415,14 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
         const cssEndBuckets = get<any[]>(locationBucket, 'css_end.buckets', []);
 
         //TODO we need to ship interval data with heartbeat to calculate this accurately
-        const checkInterval = 10000; // 10s
+        const checkInterval = 1000; // 1s
 
         const cssBucketToCTE = (cssBucket: any): CoalescedTimelineEvent => {
           const status: string =
             cssBucket.up.value > 0 ? (cssBucket.down.value == 0 ? 'up' : 'mixed') : 'down';
           return {
             start: Date.parse(cssBucket.key),
-            end: cssBucket.last.value+ checkInterval,
+            end: cssBucket.last.value + checkInterval,
             locations: [location],
             status: status,
           };
@@ -421,11 +445,11 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
       });
     });
 
-
     console.log('RESULT IS', JSON.stringify(result, null, 2));
-    console.log('TIMELINE IS', JSON.stringify(locationTimelines, null, 2));
 
-    return locationTimelines;
+    const coalesced = zipTimelines(Object.values(locationTimelines))
+    console.log('COALESCED IS', JSON.stringify(coalesced, null, 2));
+    return Promise.resolve(coalesced);
   }
 
   /**

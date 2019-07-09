@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import { MonitorChart, MonitorPageTitle } from '../../../../common/graphql/types';
+import { MonitorChart, MonitorPageTitle, CoalescedTimelineEvent } from '../../../../common/graphql/types';
 
 export interface UMMonitorsAdapter {
   getMonitorChartsData(
@@ -19,7 +19,7 @@ export interface UMMonitorsAdapter {
     dateRangeStart: string,
     dateRangeEnd: string,
     monitorId: string
-  ): Promise<any>;
+  ): Promise<CoalescedTimelineEvent[]>;
   getMonitors(
     request: any,
     dateRangeStart: string,
