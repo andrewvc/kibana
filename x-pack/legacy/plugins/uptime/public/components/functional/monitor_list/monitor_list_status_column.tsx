@@ -12,6 +12,7 @@ import { parseTimestamp } from './parse_timestamp';
 interface MonitorListStatusColumnProps {
   status: string;
   timestamp: string;
+  grayOut: bool;
 }
 
 const getHealthColor = (status: string): string => {
@@ -42,17 +43,19 @@ const getHealthMessage = (status: string): string | null => {
         defaultMessage: 'Mixed',
       });
     default:
-      return null;
+      return 'No Data';
   }
 };
 
 export const MonitorListStatusColumn = ({
   status,
+  grayOut,
   timestamp: tsString,
 }: MonitorListStatusColumnProps) => {
   const timestamp = parseTimestamp(tsString);
+  const style = grayOut === true ? {opacity: 0.25} : {};
   return (
-    <EuiFlexGroup alignItems="center" gutterSize="none">
+    <EuiFlexGroup alignItems="center" gutterSize="none" style={style}>
       <EuiFlexItem>
         <EuiHealth color={getHealthColor(status)} style={{ display: 'block' }}>
           {getHealthMessage(status)}

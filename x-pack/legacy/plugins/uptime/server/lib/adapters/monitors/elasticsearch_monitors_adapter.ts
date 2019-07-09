@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import { get, set } from 'lodash';
+import { get, set, uniq, flatten, sortBy } from 'lodash';
 import { INDEX_NAMES } from '../../../../common/constants';
 import {
   ErrorListItem,
@@ -251,7 +251,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
   ): Promise<CoalescedTimelineEvent[]> {
 
     // TODO figure out the best size here
-    const cssTermsSize = 20;
+    const cssTermsSize = 5;
 
     const body = {
       query: {
@@ -271,10 +271,13 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
       },
       size: 0,
       aggs: {
+        css_count: {
+                  cardinality: { field: 'summary.continuous_status_segment' },
+        },
         dateHist: {
-          auto_date_histogram: {
+          date_histogram: {
             field: '@timestamp',
-            buckets: 10,
+            interval: getHistogramInterval(dateRangeStart, dateRangeEnd)
           },
           aggs: {
             location: {
@@ -284,7 +287,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
               },
               aggs: {
                 css_count: {
-                  value_count: { field: 'summary.continuous_status_segment' },
+                  cardinality: { field: 'summary.continuous_status_segment' },
                 },
                 css_start: {
                   terms: {
@@ -347,6 +350,41 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
 
     const result = await this.database.search(request, params);
 
+    console.log('RESULT IS', JSON.stringify(result, null, 2));
+
+    // TODO this should be riding along with the CTE in a future version
+    const checkInterval = 1000;
+    const checkIntervalSlop = 5;
+    const checkMaxContiguousGap = checkInterval * checkIntervalSlop;
+
+    const similarTimes = (a: number, b: number): boolean => {
+        return Math.abs(a- b) < checkMaxContiguousGap;
+    }
+
+    const findLinearGaps = (timeline: CoalescedTimelineEvent[]): CoalescedTimelineEvent[] => {
+      const result: CoalescedTimelineEvent[] = [];
+      timeline.reverse();
+      timeline.forEach( (cte, idx) => {
+        result.push(cte);
+        const next = timeline[idx+1];
+        if (next) {
+          const gap = next.start - cte.end;
+          // TODO examine this 10 hardcoded gap
+          if (gap > checkMaxContiguousGap) {
+            console.log("INSERT GAP", gap, checkMaxContiguousGap);
+            result.push({
+              start: cte.end+1,
+              end: next.start-1,
+              status: "missing",
+              locations: cte.locations,
+            })
+          }
+        }
+      });
+      result.reverse();
+      return result;
+    };
+
     const coalesceLinear = (timeline: CoalescedTimelineEvent[]): CoalescedTimelineEvent[] => {
       const result: CoalescedTimelineEvent[] = [];
       let last: (CoalescedTimelineEvent | null) = null;
@@ -358,47 +396,67 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
           return;
         }
 
-        console.log(cte.start, last.start)
-        if (cte.start === last.start) {
-          console.log("EXTEND");
-          last.end = cte.end;
+        if (cte.status === last.status && cte.start === last.start && cte.end === last.end) {
+          console.log("SKIP");
           return;
+        }
+
+        if (cte.status === last.status) {
+          if (cte.start === last.start) {
+            if (last.end < cte.end) {
+              last.end = cte.end;
+            }
+            return
+          }
+          if (similarTimes(last.start, cte.end)) {
+            if (last.end < cte.end) {
+              last.end = cte.end;
+            }
+            return
+          }
         } 
 
         console.log("NEW");
         last = cte;
         result.push(cte);
       });
+
+      console.log("COAL REDUCE", timeline.length, result.length);
       return result;
     };
 
-    const zipTimelines = (timelines: CoalescedTimelineEvent[][]): CoalescedTimelineEvent[] => {
-      const result: CoalescedTimelineEvent[] = [];
+    const sortTimeline = (timeline: CoalescedTimelineEvent[]): CoalescedTimelineEvent[] => {
+      const sorted = sortBy(timeline, 'start');
+      sorted.reverse()
+      return sorted;
+    }
 
-      // Since the data is individually sorted we can just zip it together
-      while(timelines.length > 0) {
-        let lowestT: CoalescedTimelineEvent[] = [];
-        timelines.forEach( t => {
-          if (lowestT.length > 0) {
-            console.log("COMP", t[0].locations, t[0].start, lowestT[0].locations, lowestT[0].start);
-          }
-          if (lowestT.length === 0 || t[0].start < lowestT[0].start) {
-            lowestT = t
-          }
-        });
-
-        console.log("PUSH IT", lowestT)
-        result.push(lowestT.shift()!);
-
-        timelines = timelines.filter( t => t.length > 0)
-      }
-
-      return result;
+    const combineTimelines = (timelines: CoalescedTimelineEvent[][]): CoalescedTimelineEvent[] => {
+      const res: CoalescedTimelineEvent[] = [];
+      return res.concat.apply(res, flatten(Object.values(locationTimelines)));
     };
 
+    const coalesceLocations = (timeline: CoalescedTimelineEvent[]): CoalescedTimelineEvent[] => {
+      if (timeline.length == 0) return [];
+      let last = timeline.shift()!;
+      const result: CoalescedTimelineEvent[] = [last];
+      timeline.forEach( cte => {
+        // TODO this should be riding along with the CTE in a future version
+        if (last.status === cte.status && similarTimes(last.start, cte.start)) {
+          last.locations = uniq(last.locations.concat(cte.locations));
+        } else {
+          result.push(cte);
+        }
+        last = cte;
+      });
+      return result;
+    }
+
+    const totalCSSCount = get<number>(result, 'aggregations.css_count.value', 0);
     const dateHistBuckets = get<any[]>(result, 'aggregations.dateHist.buckets', []);
-    const locationTimelines: {[key: string]: CoalescedTimelineEvent[]} = {};
+    const locationTimelines: {[key: string]: CoalescedTimelineEvent[][]} = {};
     dateHistBuckets.forEach((dateHistBucket: any, dateIdx: number) => {
+      console.log("DATE HIST BUCKET COUNT", dateHistBuckets.length);
       const isFirstBucket = dateIdx == 0;
       const isLastBucket = dateIdx == dateHistBuckets.length;
       const bucketStartedAt = isFirstBucket ? DateMath.parse(dateRangeStart) : dateHistBucket.key;
@@ -407,6 +465,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
         : dateHistBuckets[dateIdx + 1];
 
       const locationBuckets = get<any[]>(dateHistBucket, 'location.buckets', []);
+      console.log("LOCATION BUCKET COUNT", locationBuckets.length);
       locationBuckets.forEach(locationBucket => {
         const location: string = locationBucket.key;
         let timeline: CoalescedTimelineEvent[] = [];
@@ -419,7 +478,8 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
 
         const cssBucketToCTE = (cssBucket: any): CoalescedTimelineEvent => {
           const status: string =
-            cssBucket.up.value > 0 ? (cssBucket.down.value == 0 ? 'up' : 'mixed') : 'down';
+            cssBucket.up.value > 0 ? (cssBucket.down.value === 0 ? 'up' : 'mixed') : 'down';
+          console.log("BUCKET FOR", cssBucket.up.value, cssBucket.down.value, status);
           return {
             start: Date.parse(cssBucket.key),
             end: cssBucket.last.value + checkInterval,
@@ -439,15 +499,27 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
             status: 'chaos'
           });
         }
-        timeline = timeline.concat(endCTEs);
+        endCTEs.filter( endCTE => {
+          !timeline.find(tCTE => endCTE.start === tCTE.start)
+        }).forEach(cte => timeline.push(cte));
 
-        locationTimelines[location] = coalesceLinear(timeline);
+        if (!locationTimelines[location]) {
+          locationTimelines[location] = [];
+        }
+        locationTimelines[location].push(timeline);
+        //locationTimelines[location] = timeline;
       });
+      //findLinearGaps(coalesceLinear(sortTimeline(timeline)))
     });
 
-    console.log('RESULT IS', JSON.stringify(result, null, 2));
+    let coalesced: CoalescedTimelineEvent[] = [];
+    Object.values(locationTimelines).forEach( lt => {
+      findLinearGaps(coalesceLinear(sortTimeline(flatten(lt)))).forEach(cte => coalesced.push(cte));
+    });
+    coalesced = coalesceLocations(sortTimeline(coalesced));
 
-    const coalesced = zipTimelines(Object.values(locationTimelines))
+
+    console.log('TOTAL CSS COUNT', totalCSSCount);
     console.log('COALESCED IS', JSON.stringify(coalesced, null, 2));
     return Promise.resolve(coalesced);
   }

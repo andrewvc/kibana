@@ -4,11 +4,15 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import { EuiLoadingSpinner } from '@elastic/eui';
-import React from 'react';
-import {  CoalescedTimelineEvent } from '../../../common/graphql/types';
+import { EuiLoadingSpinner, EuiPanel, EuiBasicTable, EuiText } from '@elastic/eui';
+import React, { Fragment, useContext } from 'react';
+import { uniq, flatten, merge } from 'lodash';
+import { CoalescedTimelineEvent } from '../../../common/graphql/types';
 import { UptimeGraphQLQueryProps, withUptimeGraphQL } from '../higher_order';
 import { coalescedTimelineQuery } from '../../queries';
+import { UptimeSettingsContext } from '../../contexts';
+import moment from 'moment';
+import { MonitorListStatusColumn } from './monitor_list/monitor_list_status_column';
 
 interface MonitorPageCoalescedTimelineQueryResult {
   timeline?: CoalescedTimelineEvent[];
@@ -20,16 +24,94 @@ interface MonitorPageCoalescedTimelineProps {
   monitorId: string;
 }
 
-type Props = MonitorPageCoalescedTimelineProps & UptimeGraphQLQueryProps<MonitorPageCoalescedTimelineQueryResult>;
+type Props = MonitorPageCoalescedTimelineProps &
+  UptimeGraphQLQueryProps<MonitorPageCoalescedTimelineQueryResult>;
 
-export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) =>
-  data && data.timeline ? (
-      <pre>
-        {data.timeline}
-      </pre>
-  ) : (
-    <EuiLoadingSpinner size="xl" />
+const timelineToTableData = (
+  timeline: CoalescedTimelineEvent[]
+): { locations: string[]; tabularTimeline: any } => {
+  // We want to process this backwards, from earliest to latest
+  const chronological = timeline.slice().reverse();
+  const lastLocStatuses: { [key: string]: string } = {};
+  const mapped = chronological.map(cte => {
+    const res: any = { start: cte.start, end: cte.end, locations: cte.locations, status: cte.status };
+    cte.locations.forEach(l => {
+      res[l] = cte.status;
+      lastLocStatuses[l] = cte.status;
+      merge(res, lastLocStatuses);
+    });
+    return res;
+  });
+  mapped.reverse();
+  const locations = Object.keys(lastLocStatuses)
+  locations.sort();
+  return { locations: locations, tabularTimeline: mapped };
+};
+
+export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
+  if (!data || !data.timeline) {
+    return <EuiLoadingSpinner size="xl" />;
+  }
+
+  const { locations, tabularTimeline } = timelineToTableData(data.timeline);
+
+  const { colors } = useContext(UptimeSettingsContext);
+  const colorMap: any = {
+    up: colors.success,
+    mixed: colors.warning,
+    down: colors.danger,
+  };
+  const columns = [];
+  locations.forEach(l => {
+    columns.push({
+      field: l,
+      name: l,
+      sortable: false,
+      width: '100px',
+      render: (status: string, d: any) => {
+        console.log("Indexof ", l, d.locations);
+        const unchanged = d.locations.indexOf(l) < 0;
+        return <MonitorListStatusColumn grayOut={unchanged} status={status} timestamp={d.start} />;
+      },
+    });
+  });
+  columns.push({
+    field: 'status',
+    name: 'Description',
+    sortable: false,
+    render: (status: string, { locations, end }: { locations: string[], end: number }) => {
+      return (
+        <EuiText>
+          <strong>{locations.join(', ')}</strong> changed status to <strong>{status}</strong>. End {moment(end).toLocaleString()}
+        </EuiText>
+      );
+    },
+  });
+
+  return (
+    <EuiPanel>
+      <EuiBasicTable items={tabularTimeline} columns={columns} />
+    </EuiPanel>
   );
+
+  /*
+  const listItems = data.timeline.map(cte => {
+    
+
+    const label = <Fragment><strong>{cte.status}</strong>
+                    {' '}from <strong>{cte.locations.join(", ")}</strong>
+                    {' '}at <strong>{moment(cte.start).fromNow()}</strong>
+                  </Fragment>
+    return <EuiListGroupItem label={label} />
+  });
+
+  return <EuiPanel>
+    <EuiListGroup maxWidth="false">
+      {listItems}
+    </EuiListGroup>
+    </EuiPanel>;
+    */
+};
 
 export const MonitorPageCoalescedTimeline = withUptimeGraphQL<
   MonitorPageCoalescedTimelineQueryResult,
