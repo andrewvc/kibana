@@ -2,9 +2,9 @@ import { CoalescedTimelineEvent } from '../../../common/graphql/types';
 import { sortBy, groupBy, max, min, uniq, flatten, map } from 'lodash';
 
 export const combineStatuses = (...statuses: string[]): string => {
-    const unique = uniq(statuses);
-    return unique.length == 1 ? unique[0] : 'flapping';
-}
+  const unique = uniq(statuses);
+  return unique.length == 1 ? unique[0] : 'flapping';
+};
 
 export class TLEvent implements CoalescedTimelineEvent {
   start: number;
@@ -44,11 +44,11 @@ export class TLMultiEvent implements CoalescedTimelineEvent {
 
   static combine(...input: CoalescedTimelineEvent[]): TLMultiEvent {
     return new TLMultiEvent(
-        flatten(input.map(e => e.locations)),
-        input[0].interval,
-        combineStatuses(...input.map(e => e.status)),
-        min<number>(map(input, 'start')),
-        max<number>(map(input, 'end'))
+      flatten(input.map(e => e.locations)),
+      input[0].interval,
+      combineStatuses(...input.map(e => e.status)),
+      min<number>(map(input, 'start')),
+      max<number>(map(input, 'end'))
     );
   }
 }
@@ -60,11 +60,17 @@ export class Timeline {
   // Number of intervals (in time) adjacent checks from different locations can be coalesced
   intervalSlop: number;
 
-  constructor(events: TLEvent[]) {
+  // These numbers are used to find missing data at the beginning / end of the range
+  start: number; // Earliest bound data pulled from
+  end: number; // Latest bound data pulled from
+
+  constructor(events: TLEvent[], start: number, end: number) {
     this.eventsByLocation = {};
     this.computed = [];
     this.needComputeUpdate = false;
     this.intervalSlop = 5;
+    this.start = start;
+    this.end = end;
     events.forEach(event => this.add(event));
   }
 
@@ -81,9 +87,13 @@ export class Timeline {
   }
 
   compute(): CoalescedTimelineEvent[] {
+    // These calculations happen on the individual location data
     this.coalesceIdenticalStart();
-    this.coalesceSimilarComputedEvents();
-    //this.mergeLocationsIntoComputed();
+    this.coalesceCloseTogether();
+    this.calculateNoData();
+    // This calculation merges the individual location data into one sequence
+    // It also combines similar events on the timeline
+    this.mergeLocationsIntoComputed();
     this.sortComputed();
     return this.computed;
   }
@@ -96,14 +106,12 @@ export class Timeline {
     return this.computed;
   }
 
-  
-
   coalesceIdenticalStart() {
     for (let location in this.eventsByLocation) {
       const locEvents = this.eventsByLocation[location];
       const byStart = groupBy(locEvents, 'start');
 
-      const coalesced: TLEvent[] = [];
+      const coalesced: TLEvent[] = []
       for (let startStr in byStart) {
         const eventGroup = byStart[startStr];
         let start = eventGroup[0].start;
@@ -119,36 +127,85 @@ export class Timeline {
     }
   }
 
-  mergeLocationsIntoComputed() {
-    this.computed = [];
-
+  coalesceCloseTogether() {
     for (let location in this.eventsByLocation) {
-      const locEvents = this.eventsByLocation[location];
-      locEvents.forEach(e => this.computed.push(e));
+      const events = this.eventsByLocation[location];
+      if (events.length < 2) continue;
+      const results: TLEvent[] = [events.shift()!];
+      const last = results[0];
+      events.forEach( (candidateEvent, idx)  => {
+        const withinSlop = (candidateEvent.start - last.end < this.intervalSlop*candidateEvent.interval);
+        if (candidateEvent.status === last.status && withinSlop) {
+          last.end = candidateEvent.end;
+          return;
+        }
+        results.push(candidateEvent);
+      });
+      this.eventsByLocation[location] = results;
     }
   }
 
-  coalesceSimilarComputedEvents() {
+  calculateNoData() {
+    // Start by assuming a single empty range spanning the entire timespan
+    // we then arrive at the conclusion after iterating through all data
+
+    for (let location in this.eventsByLocation) {
+      const locEvents = sortBy(this.eventsByLocation[location], 'start');
+      const locResults: TLEvent[] = [];
+
+      // Handle a missing initial event
+      const first = locEvents[0];
+      if (first.start > this.start + (first.interval * this.intervalSlop)) {
+        locResults.push(
+          new TLEvent(location, first.interval, 'missing', this.start, first.start - 1)
+        );
+      }
+
+      // Find gaps in the middle
+      locEvents.forEach((event, idx) => {
+        locResults.push(event);
+
+        const next = locEvents[idx+1];
+        if (!next) return; // nothing to do on last element
+
+        if (next.start - event.end > next.interval * this.intervalSlop) {
+          locResults.push(
+            new TLEvent(location, next.interval, 'missing', event.end + 1, next.start - 1)
+          );
+        }
+      });
+
+      // Handle a missing final event
+      const last = locEvents[locEvents.length - 1];
+      if (last.end < this.end - (last.interval * this.intervalSlop)) {
+        locResults.push(new TLEvent(location, last.interval, 'missing', last.end + 1, this.end));
+      }
+
+      this.eventsByLocation[location] = locResults;
+    }
+  }
+
+  mergeLocationsIntoComputed() {
     // This is a pretty naive/inefficient algorithm, we can probably improve it
     const results: CoalescedTimelineEvent[] = [];
 
     const combined: TLEvent[] = [];
     // Make one timeline of all events
-    Object.values(this.eventsByLocation).forEach( events => events.forEach(e => combined.push(e)));
+    Object.values(this.eventsByLocation).forEach(events => events.forEach(e => combined.push(e)));
 
-    while(combined.length > 0) {
+    while (combined.length > 0) {
       const event = combined.pop()!;
 
       const slopDistance = event.interval * this.intervalSlop;
 
       const closestEventsByLocation: {
-        [key: string]: { 
-          event: TLEvent
-          distance: number
+        [key: string]: {
+          event: TLEvent;
+          distance: number;
         };
       } = {};
 
-      combined.forEach( candidateEvent => {
+      combined.forEach(candidateEvent => {
         const startDistance = Math.abs(event.start - candidateEvent.start);
         const endDistance = Math.abs(event.end - candidateEvent.end);
         if (startDistance <= slopDistance && endDistance <= slopDistance) {
@@ -167,7 +224,7 @@ export class Timeline {
       if (closestEvents.length == 0) {
         results.push(event);
         continue;
-      };
+      }
 
       results.push(TLMultiEvent.combine(event, ...closestEvents));
 
