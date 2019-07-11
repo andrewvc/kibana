@@ -511,6 +511,8 @@ export interface CoalescedTimelineEvent {
   locations: string[];
 
   status: string;
+
+  interval: number;
 }
 /** The primary object returned for monitor states. */
 export interface MonitorSummaryResult {

@@ -52,6 +52,7 @@ export const monitorsSchema = gql`
     end: Float!
     locations: [String!]!
     status: String!
+    interval: Int!
   }
 
   "Represents a bucket of monitor status information."
