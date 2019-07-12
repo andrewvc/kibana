@@ -49,11 +49,11 @@ const getHealthMessage = (status: string): string | null => {
       });
     case 'unstable':
       return i18n.translate('xpack.uptime.monitorList.statusColumn.unstableLabel', {
-        defaultMessage: 'Unstable'
+        defaultMessage: 'Unstable',
       });
     case 'flapping':
       return i18n.translate('xpack.uptime.monitorList.statusColumn.flappingLabel', {
-        defaultMessage: 'Flapping'
+        defaultMessage: 'Flapping',
       });
     default:
       return 'No Data';
@@ -66,16 +66,25 @@ export const MonitorListStatusColumn = ({
   timestamp: tsString,
 }: MonitorListStatusColumnProps) => {
   const timestamp = parseTimestamp(tsString);
-  const style = grayOut === true ? {opacity: 0.25} : {};
+  const style = grayOut === true ? { opacity: 0.25 } : {};
   let humanFriendlyAgo: string;
   const tsDiff = Math.abs(timestamp.diff(new Date().getTime()));
   const duration = moment.duration(tsDiff);
   if (duration.asSeconds() < 60) {
     humanFriendlyAgo = `${duration.seconds()}s ago`;
-  } else if (duration.asMinutes()< 60) {
-    humanFriendlyAgo = `${duration.minutes()}m${duration.seconds()}s ago`;
-  } else if (duration.asHours()<24) {
-    humanFriendlyAgo = `${duration.hours()}:${duration.minutes()}:${duration.seconds()} ago`;
+  } else if (duration.asMinutes() < 60) {
+    humanFriendlyAgo = `${duration.minutes()}m ${duration.seconds()}s ago`;
+  } else if (duration.asHours() < 24) {
+    humanFriendlyAgo = `${duration
+      .hours()
+      .toString()
+      .padStart(2, '0')}:${duration
+      .minutes()
+      .toString()
+      .padStart(2, '0')}:${duration
+      .seconds()
+      .toString()
+      .padStart(2, '0')} ago`;
   } else {
     humanFriendlyAgo = `${duration.humanize()} ago`;
   }
@@ -88,7 +97,7 @@ export const MonitorListStatusColumn = ({
         <EuiToolTip
           content={
             <EuiText color="ghost" size="xs">
-              {humanFriendlyAgo}
+              {timestamp.toLocaleString()}
             </EuiText>
           }
         >

@@ -14,6 +14,8 @@ export const coalescedTimelineQuery = gql`
       status
       locations
       interval
+      up
+      down
     }
   }
 

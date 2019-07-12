@@ -6,19 +6,27 @@ export const combineStatuses = (...statuses: string[]): string => {
   return unique.length == 1 ? unique[0] : 'flapping';
 };
 
+export const sumUpDown = (...events: {up: number, down: number}[]): {up: number, down: number} => {
+  return events.reduce( (a,b) => { return {up: a.up+b.up, down: a.down+b.down} });
+}
+
 export class TLEvent implements CoalescedTimelineEvent {
   start: number;
   end: number;
   status: string;
   location: string;
   interval: number;
+  up: number;
+  down: number;
 
-  constructor(location: string, interval: number, status: string, start: number, end: number) {
+  constructor(location: string, interval: number, status: string, start: number, end: number, up: number, down: number) {
     this.location = location;
     this.status = status;
     this.start = start;
     this.end = end;
     this.interval = interval;
+    this.up = up;
+    this.down = down;
   }
 
   get locations() {
@@ -33,23 +41,30 @@ export class TLMultiEvent implements CoalescedTimelineEvent {
   status: string;
   locations: string[];
   interval: number;
+  up: number;
+  down: number;
 
-  constructor(locations: string[], interval: number, status: string, start: number, end: number) {
+  constructor(locations: string[], interval: number, status: string, start: number, end: number, up: number, down: number) {
     this.locations = uniq(locations);
     this.locations.sort();
     this.status = status;
     this.start = start;
     this.end = end;
     this.interval = interval;
+    this.up = up;
+    this.down = down;
   }
 
   static combine(...input: CoalescedTimelineEvent[]): TLMultiEvent {
+    const {up, down} = sumUpDown(...input);
     return new TLMultiEvent(
       flatten(input.map(e => e.locations)),
       input[0].interval,
       combineStatuses(...input.map(e => e.status)),
       Math.min(...input.map( e => e.start)),
       Math.max(...input.map( e => e.end)),
+      up, 
+      down
     );
   }
 }
@@ -127,8 +142,9 @@ export class Timeline {
         const interval = eventGroup[0].interval;
         const end = Math.max(...eventGroup.map(e => e.end));
         const status = combineStatuses(...eventGroup.map(event => event.status));
+        const {up, down} = sumUpDown(...eventGroup);
 
-        coalesced.push(new TLEvent(location, interval, status, start, end));
+        coalesced.push(new TLEvent(location, interval, status, start, end, up, down));
       }
 
       this.eventsByLocation[location] = coalesced;
@@ -145,6 +161,9 @@ export class Timeline {
         const withinSlop = (candidateEvent.start - last.end < this.intervalSlop*candidateEvent.interval);
         if (candidateEvent.status === last.status && withinSlop) {
           last.end = Math.max(last.end, candidateEvent.end);
+          const {up, down} = sumUpDown(last, candidateEvent);
+          last.up = up;
+          last.down = down
           return;
         }
         results.push(candidateEvent);
@@ -169,7 +188,7 @@ export class Timeline {
       const firstGap = firstGapEnd - firstGapStart;
       if (firstGap > first.interval * this.intervalSlop) {
         locResults.push(
-          new TLEvent(location, first.interval, 'missing', firstGapStart, firstGapEnd)
+          new TLEvent(location, first.interval, 'missing', firstGapStart, firstGapEnd, 0, 0)
         );
       }
 
@@ -185,7 +204,7 @@ export class Timeline {
         const gap = gapEnd - gapStart;
         if (gap > next.interval * this.intervalSlop) {
           locResults.push(
-            new TLEvent(location, next.interval, 'missing', gapStart, gapEnd)
+            new TLEvent(location, next.interval, 'missing', gapStart, gapEnd, 0, 0)
           );
         }
       });
@@ -196,7 +215,7 @@ export class Timeline {
       const endGapEnd = this.end;
       const endGap = endGapEnd - endGapStart;
       if (endGap > last.interval * this.intervalSlop) {
-        locResults.push(new TLEvent(location, last.interval, 'missing', endGapStart, endGapEnd));
+        locResults.push(new TLEvent(location, last.interval, 'missing', endGapStart, endGapEnd, 0, 0));
       }
 
       this.eventsByLocation[location] = locResults;

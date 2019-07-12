@@ -250,7 +250,6 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     dateRangeEnd: string,
     monitorId: string
   ): Promise<CoalescedTimelineEvent[]> {
-
     // TODO figure out the best size here
     const cssTermsSize = 3;
 
@@ -278,7 +277,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
         dateHist: {
           auto_date_histogram: {
             field: '@timestamp',
-            buckets: 10
+            buckets: 10,
             //interval: getHistogramInterval(dateRangeStart, dateRangeEnd)
           },
           aggs: {
@@ -359,8 +358,8 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     const params = { index: INDEX_NAMES.HEARTBEAT, body: body };
     const result = await this.database.search(request, params);
 
-    const absoluteStart = DateMath.parse(dateRangeStart)!.unix()*1000;
-    const absoluteEnd = DateMath.parse(dateRangeEnd)!.unix()*1000;
+    const absoluteStart = DateMath.parse(dateRangeStart)!.unix() * 1000;
+    const absoluteEnd = DateMath.parse(dateRangeEnd)!.unix() * 1000;
     const timeline = new Timeline([], absoluteStart, absoluteEnd);
 
     const totalCSSCount = get<number>(result, 'aggregations.css_count.value', 0);
@@ -380,23 +379,43 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
 
         let cssUpCount = 0;
         let cssDownCount = 0;
-        cssStartBuckets.concat(cssEndBuckets).forEach((cssBucket: any)  => {
+        cssStartBuckets.concat(cssEndBuckets).forEach((cssBucket: any) => {
           cssUpCount += cssBucket.up.value;
           cssDownCount += cssBucket.down.value;
           const status: string =
             cssBucket.up.value > 0 ? (cssBucket.down.value === 0 ? 'up' : 'mixed') : 'down';
-          timeline.add(new TLEvent(location, checkInterval, status, Date.parse(cssBucket.key), cssBucket.last.value + checkInterval));
+          timeline.add(
+            new TLEvent(
+              location,
+              checkInterval,
+              status,
+              Date.parse(cssBucket.key),
+              cssBucket.last.value + checkInterval,
+              cssBucket.up.value,
+              cssBucket.down.value
+            )
+          );
         });
 
-        const cssBucketCount = cssStartBuckets.length + cssEndBuckets.length
+        const cssBucketCount = cssStartBuckets.length + cssEndBuckets.length;
         // TODO handle unstable situation
         if (cssCount > cssBucketCount) {
-          const chaosUpCount = locUpCount - cssUpCount;
-          const chaosDownCount = locDownCount - cssDownCount;
-          const unstableStart = cssStartBuckets[cssStartBuckets.length-1].last.value;
-          const unstableEnd = Date.parse(cssEndBuckets[cssEndBuckets.length-1].key);
-          timeline.add(new TLEvent(location, checkInterval, 'unstable', unstableStart, unstableEnd));
-         }
+          const unstableUpCount = locUpCount - cssUpCount;
+          const unstableDownCount = locDownCount - cssDownCount;
+          const unstableStart = cssStartBuckets[cssStartBuckets.length - 1].last.value;
+          const unstableEnd = Date.parse(cssEndBuckets[cssEndBuckets.length - 1].key);
+          timeline.add(
+            new TLEvent(
+              location,
+              checkInterval,
+              'unstable',
+              unstableStart,
+              unstableEnd,
+              unstableUpCount,
+              unstableDownCount
+            )
+          );
+        }
       });
     });
 

@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import { EuiLoadingSpinner, EuiPanel, EuiBasicTable, EuiText } from '@elastic/eui';
+import { EuiLoadingSpinner, EuiTitle, EuiPanel, EuiBasicTable, EuiText } from '@elastic/eui';
 import React, { Fragment, useContext } from 'react';
 import { uniq, flatten, merge } from 'lodash';
 import { CoalescedTimelineEvent } from '../../../common/graphql/types';
@@ -13,6 +13,7 @@ import { coalescedTimelineQuery } from '../../queries';
 import { UptimeSettingsContext } from '../../contexts';
 import moment from 'moment';
 import { MonitorListStatusColumn } from './monitor_list/monitor_list_status_column';
+import { FormattedMessage } from '@kbn/i18n/react';
 
 interface MonitorPageCoalescedTimelineQueryResult {
   timeline?: CoalescedTimelineEvent[];
@@ -39,15 +40,17 @@ const timelineToTableData = (
   const chronological = timeline.slice().reverse();
   const lastLocStatuses: { [key: string]: string } = {};
   const mapped = chronological.map((cte, idx) => {
-    const isMostRecent = idx === chronological.length-1;
+    const isMostRecent = idx === chronological.length - 1;
     const res: TableCTE = {
       start: cte.start,
       end: cte.end,
       locations: cte.locations,
       status: cte.status,
       interval: cte.interval,
+      up: cte.up,
+      down: cte.down,
       // TODO Use the same constant for slop here as in the timeline
-      isCurrentStatus: isMostRecent && new Date().getTime() < cte.end+(5*cte.interval),
+      isCurrentStatus: isMostRecent && new Date().getTime() < cte.end + 5 * cte.interval,
       statusByLocation: {},
     };
     cte.locations.forEach(location => {
@@ -85,7 +88,7 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
       width: '100px',
       render: (status: string, d: TableCTE) => {
         const grayOut = !d.isCurrentStatus && d.locations.indexOf(l) < 0;
-        
+
         return (
           <MonitorListStatusColumn
             grayOut={grayOut}
@@ -100,21 +103,43 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
     field: 'status',
     name: 'Description',
     sortable: false,
-    render: (status: string, { locations, start, end, isCurrentStatus }: TableCTE) => {
-      const verb = isCurrentStatus ? 'has been' : 'was';
+    render: (status: string, { locations, start, end, isCurrentStatus, up, down }: TableCTE) => {
+      const verb = isCurrentStatus ? (locations.length > 1 ? 'have been' : 'has been') : (locations.length > 1 ? 'were' : 'was');
+      const total = up + down;
+      const statusMessage =
+        status != 'unstable' ? (
+          <strong>{status}</strong>
+        ) : (
+          <Fragment>
+            <strong>{status}</strong> having too many transitions to show here. <strong>{Number((up / total) * 100).toFixed(2)}%</strong>{' '}
+            of pings succeeded
+          </Fragment>
+        );
       return (
         <EuiText>
-          <strong>{locations.join(', ')}</strong> {verb} <strong>{status}</strong> for{' '}
-          <strong>{moment.duration(end - start).humanize()}</strong>
+          <strong>{locations.join(', ')}</strong> {verb} {statusMessage} for{' '}
+          <strong>{moment.duration(end - start).humanize()}</strong> with <strong>{total} pings</strong>{' '}
+          performed
         </EuiText>
       );
     },
   });
 
   return (
-    <EuiPanel>
-      <EuiBasicTable items={tabularTimeline} columns={columns} />
-    </EuiPanel>
+    <Fragment>
+      <EuiTitle size="xs">
+        <h4>
+          <FormattedMessage
+            id="xpack.uptime.timeline.titleLabel"
+            defaultMessage="Timeline"
+            description="Timeline of events"
+          />
+        </h4>
+      </EuiTitle>
+      <EuiPanel>
+        <EuiBasicTable items={tabularTimeline} columns={columns} />
+      </EuiPanel>
+    </Fragment>
   );
 };
 
