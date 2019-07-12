@@ -252,7 +252,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
   ): Promise<CoalescedTimelineEvent[]> {
 
     // TODO figure out the best size here
-    const cssTermsSize = 20;
+    const cssTermsSize = 3;
 
     const body = {
       query: {
@@ -291,6 +291,16 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                 css_count: {
                   cardinality: { field: 'summary.continuous_status_segment' },
                 },
+                up: {
+                  sum: {
+                    field: 'summary.up',
+                  },
+                },
+                down: {
+                  sum: {
+                    field: 'summary.down',
+                  },
+                },
                 css_start: {
                   terms: {
                     field: 'summary.continuous_status_segment',
@@ -318,7 +328,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                 css_end: {
                   terms: {
                     field: 'summary.continuous_status_segment',
-                    size: 1,
+                    size: cssTermsSize,
                     order: {
                       _key: 'desc',
                     },
@@ -360,24 +370,32 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
       locationBuckets.forEach(locationBucket => {
         const location: string = locationBucket.key;
         const cssCount = get<number>(locationBucket, 'css_count.value', 0);
+        const locUpCount = get<number>(locationBucket, 'up.value', 0);
+        const locDownCount = get<number>(locationBucket, 'down.value', 0);
         const cssStartBuckets = get<any[]>(locationBucket, 'css_start.buckets', []);
         const cssEndBuckets = get<any[]>(locationBucket, 'css_end.buckets', []);
 
         //TODO we need to ship interval data with heartbeat to calculate this accurately
         const checkInterval = 1000; // 1s
 
+        let cssUpCount = 0;
+        let cssDownCount = 0;
         cssStartBuckets.concat(cssEndBuckets).forEach((cssBucket: any)  => {
+          cssUpCount += cssBucket.up.value;
+          cssDownCount += cssBucket.down.value;
           const status: string =
             cssBucket.up.value > 0 ? (cssBucket.down.value === 0 ? 'up' : 'mixed') : 'down';
           timeline.add(new TLEvent(location, checkInterval, status, Date.parse(cssBucket.key), cssBucket.last.value + checkInterval));
         });
 
         const cssBucketCount = cssStartBuckets.length + cssEndBuckets.length
-        // TODO handle chaos situation
+        // TODO handle unstable situation
         if (cssCount > cssBucketCount) {
-          const chaosStart = cssStartBuckets[cssStartBuckets.length-1].last.value;
-          const chaosEnd = Date.parse(cssEndBuckets[0].key);
-          timeline.add(new TLEvent(location, checkInterval, 'chaos', chaosStart, chaosEnd));
+          const chaosUpCount = locUpCount - cssUpCount;
+          const chaosDownCount = locDownCount - cssDownCount;
+          const unstableStart = cssStartBuckets[cssStartBuckets.length-1].last.value;
+          const unstableEnd = Date.parse(cssEndBuckets[cssEndBuckets.length-1].key);
+          timeline.add(new TLEvent(location, checkInterval, 'unstable', unstableStart, unstableEnd));
          }
       });
     });

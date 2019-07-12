@@ -513,6 +513,10 @@ export interface CoalescedTimelineEvent {
   status: string;
 
   interval: number;
+
+  up: number;
+
+  down: number;
 }
 /** The primary object returned for monitor states. */
 export interface MonitorSummaryResult {

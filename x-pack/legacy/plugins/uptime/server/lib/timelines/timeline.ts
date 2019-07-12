@@ -1,6 +1,5 @@
 import { CoalescedTimelineEvent } from '../../../common/graphql/types';
 import { sortBy, groupBy, uniq, flatten } from 'lodash';
-import moment from 'moment';
 
 export const combineStatuses = (...statuses: string[]): string => {
   const unique = uniq(statuses);
@@ -26,6 +25,7 @@ export class TLEvent implements CoalescedTimelineEvent {
     return [this.location];
   }
 }
+
 
 export class TLMultiEvent implements CoalescedTimelineEvent {
   start: number;
@@ -71,7 +71,7 @@ export class Timeline {
     this.eventsByLocation = {};
     this.computed = [];
     this.needComputeUpdate = false;
-    this.intervalSlop = 5;
+    this.intervalSlop = 10;
     this.start = start;
     this.end = end;
     this.maxEnd = 0;
@@ -137,10 +137,10 @@ export class Timeline {
 
   coalesceCloseTogether() {
     for (let location in this.eventsByLocation) {
-      const events = this.eventsByLocation[location];
+      const events = sortBy(this.eventsByLocation[location], 'start');
       if (events.length < 2) continue;
       const results: TLEvent[] = [events.shift()!];
-      const last = results[0];
+      let last = results[0];
       events.forEach( (candidateEvent, idx)  => {
         const withinSlop = (candidateEvent.start - last.end < this.intervalSlop*candidateEvent.interval);
         if (candidateEvent.status === last.status && withinSlop) {
@@ -148,6 +148,7 @@ export class Timeline {
           return;
         }
         results.push(candidateEvent);
+        last = candidateEvent;
       });
       this.eventsByLocation[location] = results;
     }

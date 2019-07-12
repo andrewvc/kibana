@@ -8,11 +8,12 @@ import { EuiHealth, EuiFlexGroup, EuiFlexItem, EuiText, EuiToolTip } from '@elas
 import React from 'react';
 import { i18n } from '@kbn/i18n';
 import { parseTimestamp } from './parse_timestamp';
+import moment from 'moment';
 
 interface MonitorListStatusColumnProps {
   status: string;
   timestamp: string;
-  grayOut: bool;
+  grayOut: boolean;
 }
 
 const getHealthColor = (status: string): string => {
@@ -22,6 +23,10 @@ const getHealthColor = (status: string): string => {
     case 'down':
       return 'danger';
     case 'mixed':
+      return 'warning';
+    case 'flapping':
+      return 'warning';
+    case 'unstable':
       return 'warning';
     default:
       return '';
@@ -42,9 +47,13 @@ const getHealthMessage = (status: string): string | null => {
       return i18n.translate('xpack.uptime.monitorList.statusColumn.mixedLabel', {
         defaultMessage: 'Mixed',
       });
-    case 'chaos':
-      return i18n.translate('xpack.uptime.monitorList.statusColumn.chaosLabel', {
-        defaultMessage: 'Chaos'
+    case 'unstable':
+      return i18n.translate('xpack.uptime.monitorList.statusColumn.unstableLabel', {
+        defaultMessage: 'Unstable'
+      });
+    case 'flapping':
+      return i18n.translate('xpack.uptime.monitorList.statusColumn.flappingLabel', {
+        defaultMessage: 'Flapping'
       });
     default:
       return 'No Data';
@@ -58,6 +67,18 @@ export const MonitorListStatusColumn = ({
 }: MonitorListStatusColumnProps) => {
   const timestamp = parseTimestamp(tsString);
   const style = grayOut === true ? {opacity: 0.25} : {};
+  let humanFriendlyAgo: string;
+  const tsDiff = Math.abs(timestamp.diff(new Date().getTime()));
+  const duration = moment.duration(tsDiff);
+  if (duration.asSeconds() < 60) {
+    humanFriendlyAgo = `${duration.seconds()}s ago`;
+  } else if (duration.asMinutes()< 60) {
+    humanFriendlyAgo = `${duration.minutes()}m${duration.seconds()}s ago`;
+  } else if (duration.asHours()<24) {
+    humanFriendlyAgo = `${duration.hours()}:${duration.minutes()}:${duration.seconds()} ago`;
+  } else {
+    humanFriendlyAgo = `${duration.humanize()} ago`;
+  }
   return (
     <EuiFlexGroup alignItems="center" gutterSize="none" style={style}>
       <EuiFlexItem>
@@ -67,12 +88,12 @@ export const MonitorListStatusColumn = ({
         <EuiToolTip
           content={
             <EuiText color="ghost" size="xs">
-              {timestamp.toLocaleString()}
+              {humanFriendlyAgo}
             </EuiText>
           }
         >
           <EuiText size="xs" color="subdued">
-            {timestamp.fromNow()}
+            {humanFriendlyAgo}
           </EuiText>
         </EuiToolTip>
       </EuiFlexItem>

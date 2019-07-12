@@ -27,23 +27,38 @@ interface MonitorPageCoalescedTimelineProps {
 type Props = MonitorPageCoalescedTimelineProps &
   UptimeGraphQLQueryProps<MonitorPageCoalescedTimelineQueryResult>;
 
+type TableCTE = CoalescedTimelineEvent & {
+  isCurrentStatus: boolean;
+  statusByLocation: { [key: string]: string };
+};
+
 const timelineToTableData = (
   timeline: CoalescedTimelineEvent[]
 ): { locations: string[]; tabularTimeline: any } => {
   // We want to process this backwards, from earliest to latest
   const chronological = timeline.slice().reverse();
   const lastLocStatuses: { [key: string]: string } = {};
-  const mapped = chronological.map(cte => {
-    const res: any = { start: cte.start, end: cte.end, locations: cte.locations, status: cte.status };
-    cte.locations.forEach(l => {
-      res[l] = cte.status;
-      lastLocStatuses[l] = cte.status;
+  const mapped = chronological.map((cte, idx) => {
+    const isMostRecent = idx === chronological.length-1;
+    const res: TableCTE = {
+      start: cte.start,
+      end: cte.end,
+      locations: cte.locations,
+      status: cte.status,
+      interval: cte.interval,
+      // TODO Use the same constant for slop here as in the timeline
+      isCurrentStatus: isMostRecent && new Date().getTime() < cte.end+(5*cte.interval),
+      statusByLocation: {},
+    };
+    cte.locations.forEach(location => {
+      res.statusByLocation[location] = cte.status;
+      lastLocStatuses[location] = cte.status;
       merge(res, lastLocStatuses);
     });
     return res;
   });
   mapped.reverse();
-  const locations = Object.keys(lastLocStatuses)
+  const locations = Object.keys(lastLocStatuses);
   locations.sort();
   return { locations: locations, tabularTimeline: mapped };
 };
@@ -68,9 +83,16 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
       name: l,
       sortable: false,
       width: '100px',
-      render: (status: string, d: any) => {
-        const unchanged = d.locations.indexOf(l) < 0;
-        return <MonitorListStatusColumn grayOut={unchanged} status={status} timestamp={d.start} />;
+      render: (status: string, d: TableCTE) => {
+        const grayOut = !d.isCurrentStatus && d.locations.indexOf(l) < 0;
+        
+        return (
+          <MonitorListStatusColumn
+            grayOut={grayOut}
+            status={status}
+            timestamp={d.start.toString()}
+          />
+        );
       },
     });
   });
@@ -78,10 +100,12 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
     field: 'status',
     name: 'Description',
     sortable: false,
-    render: (status: string, { locations, start, end }: { locations: string[], start: number, end: number }) => {
+    render: (status: string, { locations, start, end, isCurrentStatus }: TableCTE) => {
+      const verb = isCurrentStatus ? 'has been' : 'was';
       return (
         <EuiText>
-          <strong>{locations.join(', ')}</strong> was <strong>{status}</strong> for <strong>{moment.duration(end-start).humanize()}</strong>
+          <strong>{locations.join(', ')}</strong> {verb} <strong>{status}</strong> for{' '}
+          <strong>{moment.duration(end - start).humanize()}</strong>
         </EuiText>
       );
     },
@@ -92,24 +116,6 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
       <EuiBasicTable items={tabularTimeline} columns={columns} />
     </EuiPanel>
   );
-
-  /*
-  const listItems = data.timeline.map(cte => {
-    
-
-    const label = <Fragment><strong>{cte.status}</strong>
-                    {' '}from <strong>{cte.locations.join(", ")}</strong>
-                    {' '}at <strong>{moment(cte.start).fromNow()}</strong>
-                  </Fragment>
-    return <EuiListGroupItem label={label} />
-  });
-
-  return <EuiPanel>
-    <EuiListGroup maxWidth="false">
-      {listItems}
-    </EuiListGroup>
-    </EuiPanel>;
-    */
 };
 
 export const MonitorPageCoalescedTimeline = withUptimeGraphQL<

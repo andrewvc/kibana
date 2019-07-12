@@ -13,6 +13,7 @@ export const coalescedTimelineQuery = gql`
       end
       status
       locations
+      interval
     }
   }
 
