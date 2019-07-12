@@ -42,6 +42,10 @@ const getHealthMessage = (status: string): string | null => {
       return i18n.translate('xpack.uptime.monitorList.statusColumn.mixedLabel', {
         defaultMessage: 'Mixed',
       });
+    case 'chaos':
+      return i18n.translate('xpack.uptime.monitorList.statusColumn.chaosLabel', {
+        defaultMessage: 'Chaos'
+      });
     default:
       return 'No Data';
   }

@@ -1,5 +1,6 @@
 import { CoalescedTimelineEvent } from '../../../common/graphql/types';
-import { sortBy, groupBy, max, min, uniq, flatten, map } from 'lodash';
+import { sortBy, groupBy, uniq, flatten } from 'lodash';
+import moment from 'moment';
 
 export const combineStatuses = (...statuses: string[]): string => {
   const unique = uniq(statuses);
@@ -47,8 +48,8 @@ export class TLMultiEvent implements CoalescedTimelineEvent {
       flatten(input.map(e => e.locations)),
       input[0].interval,
       combineStatuses(...input.map(e => e.status)),
-      min<number>(map(input, 'start')),
-      max<number>(map(input, 'end'))
+      Math.min(...input.map( e => e.start)),
+      Math.max(...input.map( e => e.end)),
     );
   }
 }
@@ -64,6 +65,8 @@ export class Timeline {
   start: number; // Earliest bound data pulled from
   end: number; // Latest bound data pulled from
 
+  maxEnd: number;
+
   constructor(events: TLEvent[], start: number, end: number) {
     this.eventsByLocation = {};
     this.computed = [];
@@ -71,6 +74,7 @@ export class Timeline {
     this.intervalSlop = 5;
     this.start = start;
     this.end = end;
+    this.maxEnd = 0;
     events.forEach(event => this.add(event));
   }
 
@@ -82,6 +86,8 @@ export class Timeline {
       group = [];
       this.eventsByLocation[event.location] = group;
     }
+
+    this.maxEnd = Math.max(this.maxEnd, event.end);
 
     group.push(event);
   }
@@ -95,6 +101,8 @@ export class Timeline {
     // It also combines similar events on the timeline
     this.mergeLocationsIntoComputed();
     this.sortComputed();
+
+
     return this.computed;
   }
 
@@ -117,7 +125,7 @@ export class Timeline {
         let start = eventGroup[0].start;
         // Events with the same start time will always have the same interval
         const interval = eventGroup[0].interval;
-        const end = max(eventGroup, 'end').end;
+        const end = Math.max(...eventGroup.map(e => e.end));
         const status = combineStatuses(...eventGroup.map(event => event.status));
 
         coalesced.push(new TLEvent(location, interval, status, start, end));
@@ -136,7 +144,7 @@ export class Timeline {
       events.forEach( (candidateEvent, idx)  => {
         const withinSlop = (candidateEvent.start - last.end < this.intervalSlop*candidateEvent.interval);
         if (candidateEvent.status === last.status && withinSlop) {
-          last.end = candidateEvent.end;
+          last.end = Math.max(last.end, candidateEvent.end);
           return;
         }
         results.push(candidateEvent);
@@ -155,9 +163,12 @@ export class Timeline {
 
       // Handle a missing initial event
       const first = locEvents[0];
-      if (first.start > this.start + (first.interval * this.intervalSlop)) {
+      const firstGapStart = this.start;
+      const firstGapEnd = first.start-1;
+      const firstGap = firstGapEnd - firstGapStart;
+      if (firstGap > first.interval * this.intervalSlop) {
         locResults.push(
-          new TLEvent(location, first.interval, 'missing', this.start, first.start - 1)
+          new TLEvent(location, first.interval, 'missing', firstGapStart, firstGapEnd)
         );
       }
 
@@ -168,17 +179,23 @@ export class Timeline {
         const next = locEvents[idx+1];
         if (!next) return; // nothing to do on last element
 
-        if (next.start - event.end > next.interval * this.intervalSlop) {
+        const gapStart = event.end + 1;
+        const gapEnd = next.start -1;
+        const gap = gapEnd - gapStart;
+        if (gap > next.interval * this.intervalSlop) {
           locResults.push(
-            new TLEvent(location, next.interval, 'missing', event.end + 1, next.start - 1)
+            new TLEvent(location, next.interval, 'missing', gapStart, gapEnd)
           );
         }
       });
 
       // Handle a missing final event
       const last = locEvents[locEvents.length - 1];
-      if (last.end < this.end - (last.interval * this.intervalSlop)) {
-        locResults.push(new TLEvent(location, last.interval, 'missing', last.end + 1, this.end));
+      const endGapStart = last.end+1;
+      const endGapEnd = this.end;
+      const endGap = endGapEnd - endGapStart;
+      if (endGap > last.interval * this.intervalSlop) {
+        locResults.push(new TLEvent(location, last.interval, 'missing', endGapStart, endGapEnd));
       }
 
       this.eventsByLocation[location] = locResults;

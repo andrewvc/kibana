@@ -252,7 +252,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
   ): Promise<CoalescedTimelineEvent[]> {
 
     // TODO figure out the best size here
-    const cssTermsSize = 5;
+    const cssTermsSize = 20;
 
     const body = {
       query: {
@@ -273,12 +273,13 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
       size: 0,
       aggs: {
         css_count: {
-                  cardinality: { field: 'summary.continuous_status_segment' },
+          cardinality: { field: 'summary.continuous_status_segment' },
         },
         dateHist: {
-          date_histogram: {
+          auto_date_histogram: {
             field: '@timestamp',
-            interval: getHistogramInterval(dateRangeStart, dateRangeEnd)
+            buckets: 10
+            //interval: getHistogramInterval(dateRangeStart, dateRangeEnd)
           },
           aggs: {
             location: {
@@ -317,7 +318,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
                 css_end: {
                   terms: {
                     field: 'summary.continuous_status_segment',
-                    size: cssTermsSize,
+                    size: 1,
                     order: {
                       _key: 'desc',
                     },
@@ -346,15 +347,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     };
 
     const params = { index: INDEX_NAMES.HEARTBEAT, body: body };
-
-    console.log('PARAMS ARE', JSON.stringify(params, null, 2));
-
     const result = await this.database.search(request, params);
-
-    console.log('RESULT IS', JSON.stringify(result, null, 2));
-
-    // TODO this should be riding along with the CTE in a future version
-    const checkInterval = 1000;
 
     const absoluteStart = DateMath.parse(dateRangeStart)!.unix()*1000;
     const absoluteEnd = DateMath.parse(dateRangeEnd)!.unix()*1000;
@@ -362,18 +355,8 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
 
     const totalCSSCount = get<number>(result, 'aggregations.css_count.value', 0);
     const dateHistBuckets = get<any[]>(result, 'aggregations.dateHist.buckets', []);
-    const locationTimelines: {[key: string]: CoalescedTimelineEvent[][]} = {};
     dateHistBuckets.forEach((dateHistBucket: any, dateIdx: number) => {
-      console.log("DATE HIST BUCKET COUNT", dateHistBuckets.length);
-      const isFirstBucket = dateIdx == 0;
-      const isLastBucket = dateIdx == dateHistBuckets.length;
-      const bucketStartedAt = isFirstBucket ? DateMath.parse(dateRangeStart) : dateHistBucket.key;
-      const bucketEndedAt = isLastBucket
-        ? DateMath.parse(dateRangeEnd)
-        : dateHistBuckets[dateIdx + 1];
-
       const locationBuckets = get<any[]>(dateHistBucket, 'location.buckets', []);
-      console.log("LOCATION BUCKET COUNT", locationBuckets.length);
       locationBuckets.forEach(locationBucket => {
         const location: string = locationBucket.key;
         const cssCount = get<number>(locationBucket, 'css_count.value', 0);
@@ -383,25 +366,22 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
         //TODO we need to ship interval data with heartbeat to calculate this accurately
         const checkInterval = 1000; // 1s
 
-        const cssBucketToCTE = (cssBucket: any)  => {
+        cssStartBuckets.concat(cssEndBuckets).forEach((cssBucket: any)  => {
           const status: string =
             cssBucket.up.value > 0 ? (cssBucket.down.value === 0 ? 'up' : 'mixed') : 'down';
-          console.log("BUCKET FOR", cssBucket.up.value, cssBucket.down.value, status);
           timeline.add(new TLEvent(location, checkInterval, status, Date.parse(cssBucket.key), cssBucket.last.value + checkInterval));
-        };
+        });
 
-        const startCTEs = cssStartBuckets.forEach(cssBucketToCTE);
-        const endCTEs = cssEndBuckets.forEach(cssBucketToCTE);
+        const cssBucketCount = cssStartBuckets.length + cssEndBuckets.length
         // TODO handle chaos situation
-        //if (cssCount > cssTermsSize*2) {
-        //  timeline.add(new TLEvent(location, checkInterval, 'chaos', startCTEs[startCTEs.length-1].end, endCTEs[endCTEs.length-1].start));
-        // }
+        if (cssCount > cssBucketCount) {
+          const chaosStart = cssStartBuckets[cssStartBuckets.length-1].last.value;
+          const chaosEnd = Date.parse(cssEndBuckets[0].key);
+          timeline.add(new TLEvent(location, checkInterval, 'chaos', chaosStart, chaosEnd));
+         }
       });
     });
 
-    console.log('TOTAL CSS COUNT', totalCSSCount);
-    console.log('COALESCED IS', JSON.stringify(timeline.events, null, 2));
-    console.log('TL GUTS', JSON.stringify(timeline.eventsByLocation), null, 2);
     return Promise.resolve(timeline.events);
   }
 

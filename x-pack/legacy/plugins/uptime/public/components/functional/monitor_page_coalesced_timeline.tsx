@@ -69,7 +69,6 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
       sortable: false,
       width: '100px',
       render: (status: string, d: any) => {
-        console.log("Indexof ", l, d.locations);
         const unchanged = d.locations.indexOf(l) < 0;
         return <MonitorListStatusColumn grayOut={unchanged} status={status} timestamp={d.start} />;
       },
@@ -79,10 +78,10 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
     field: 'status',
     name: 'Description',
     sortable: false,
-    render: (status: string, { locations, end }: { locations: string[], end: number }) => {
+    render: (status: string, { locations, start, end }: { locations: string[], start: number, end: number }) => {
       return (
         <EuiText>
-          <strong>{locations.join(', ')}</strong> changed status to <strong>{status}</strong>. End {moment(end).toLocaleString()}
+          <strong>{locations.join(', ')}</strong> was <strong>{status}</strong> for <strong>{moment.duration(end-start).humanize()}</strong>
         </EuiText>
       );
     },
