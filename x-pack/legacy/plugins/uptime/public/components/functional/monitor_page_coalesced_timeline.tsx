@@ -50,7 +50,7 @@ const timelineToTableData = (
       up: cte.up,
       down: cte.down,
       // TODO Use the same constant for slop here as in the timeline
-      isCurrentStatus: isMostRecent && new Date().getTime() < cte.end + 5 * cte.interval,
+      isCurrentStatus: new Date().getTime() < cte.end + 5 * cte.interval,
       statusByLocation: {},
     };
     cte.locations.forEach(location => {
@@ -104,22 +104,28 @@ export const MonitorPageCoalescedTimelineComponent = ({ data }: Props) => {
     name: 'Description',
     sortable: false,
     render: (status: string, { locations, start, end, isCurrentStatus, up, down }: TableCTE) => {
-      const verb = isCurrentStatus ? (locations.length > 1 ? 'have been' : 'has been') : (locations.length > 1 ? 'were' : 'was');
+      const verb = isCurrentStatus
+        ? locations.length > 1
+          ? 'have been'
+          : 'has been'
+        : locations.length > 1
+        ? 'were'
+        : 'was';
       const total = up + down;
       const statusMessage =
-        status != 'unstable' ? (
+        status != 'unstable' && status != 'flapping' && status! + 'mixed' ? (
           <strong>{status}</strong>
         ) : (
           <Fragment>
-            <strong>{status}</strong> having too many transitions to show here. <strong>{Number((up / total) * 100).toFixed(2)}%</strong>{' '}
-            of pings succeeded
+            <strong>{status}</strong> having too many transitions to show here.{' '}
+            <strong>{Number((up / total) * 100).toFixed(2)}%</strong> of pings succeeded
           </Fragment>
         );
       return (
         <EuiText>
           <strong>{locations.join(', ')}</strong> {verb} {statusMessage} for{' '}
-          <strong>{moment.duration(end - start).humanize()}</strong> with <strong>{total} pings</strong>{' '}
-          performed
+          <strong>{moment.duration(end - start).humanize()}</strong> with{' '}
+          <strong>{total} pings</strong> performed
         </EuiText>
       );
     },

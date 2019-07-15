@@ -251,7 +251,7 @@ export class ElasticsearchMonitorsAdapter implements UMMonitorsAdapter {
     monitorId: string
   ): Promise<CoalescedTimelineEvent[]> {
     // TODO figure out the best size here
-    const cssTermsSize = 3;
+    const cssTermsSize = 5;
 
     const body = {
       query: {

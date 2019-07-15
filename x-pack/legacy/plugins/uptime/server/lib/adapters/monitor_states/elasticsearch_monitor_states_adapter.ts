@@ -98,7 +98,7 @@ export class ElasticsearchMonitorStatesAdapter implements UMMonitorStatesAdapter
                 // but all agent IDs should be represented in the top 50 results in most cases.
                 // There's an edge case here where a user has accidentally configured
                 // two agents to run on different schedules, but that's an issue on the user side.
-                size: 50,
+                size: 5,
               },
             },
           },
