@@ -8,7 +8,7 @@ import gql from 'graphql-tag';
 
 export const filterBarQueryString = `
 query FilterBar($dateRangeStart: String!, $dateRangeEnd: String!) {
-  filterBar: getFilterBar(dateRangeStart: $dateRangeStart, dateRangeEnd: $dateRangeEnd) {
+  filterBar: getFilterBar(dateRangeStart: $dateRangeStart, dateRangeEnd: $dateRangeEnd, filters: $filters) {
     ids
     locations
     ports
