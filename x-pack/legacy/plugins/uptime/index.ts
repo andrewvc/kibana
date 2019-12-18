@@ -50,7 +50,7 @@ export const uptime = (kibana: any) =>
     init(server: KibanaServer) {
       const initializerContext = {} as PluginInitializerContext;
       const { savedObjects } = server;
-      const { elasticsearch, xpack_main } = server.plugins;
+      const { xpack_main } = server.plugins;
       const { usageCollection } = server.newPlatform.setup.plugins;
       console.log("YYY");
       console.log(Object.keys(initializerContext))
@@ -61,7 +61,6 @@ export const uptime = (kibana: any) =>
           route: server.newPlatform.setup.core.http.createRouter(),
         },
         {
-          elasticsearch,
           savedObjects,
           usageCollection,
           xpack: xpack_main,
