@@ -14,9 +14,6 @@ export class UptimePlugin implements Plugin<UptimeSetup> {
   }
 
   public setup() {
-    console.log("X")
-    console.log("SET IT UP")
-    console.log("X")
     return {
       __legacy: {
         config: this.initContext.config,
