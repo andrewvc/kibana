@@ -11,7 +11,7 @@ import { PingListComponent, AllLocationOption, toggleDetails } from '../ping_lis
 import { EuiComboBoxOptionProps } from '@elastic/eui';
 import { ExpandedRowMap } from '../../monitor_list/types';
 
-describe('PingList component', () => {
+describe.skip('PingList component', () => {
   let pingList: { allPings: PingResults };
 
   beforeEach(() => {
