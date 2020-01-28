@@ -10,6 +10,7 @@ import { resolve } from 'path';
 import { PluginInitializerContext } from 'src/core/server';
 import { PLUGIN } from './common/constants';
 import { KibanaServer, plugin } from './server';
+import { DEFAULT_APP_CATEGORIES } from '../../../../src/core/utils';
 
 export const uptime = (kibana: any) =>
   new kibana.Plugin({
@@ -38,6 +39,7 @@ export const uptime = (kibana: any) =>
         main: 'plugins/uptime/app',
         order: 8900,
         url: '/app/uptime#/',
+        category: DEFAULT_APP_CATEGORIES.observability,
       },
       home: ['plugins/uptime/register_feature'],
       injectDefaultVars(server: Server) {

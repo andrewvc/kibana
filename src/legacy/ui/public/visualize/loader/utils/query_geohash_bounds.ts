@@ -24,13 +24,17 @@ import { toastNotifications } from 'ui/notify';
 import { AggConfig } from 'ui/vis';
 import { timefilter } from 'ui/timefilter';
 import { Vis } from '../../../vis';
-import { SearchSource, SearchSourceContract } from '../../../courier';
-import { esFilters, Query } from '../../../../../../plugins/data/public';
+import {
+  esFilters,
+  Query,
+  SearchSource,
+  ISearchSource,
+} from '../../../../../../plugins/data/public';
 
 interface QueryGeohashBoundsParams {
   filters?: esFilters.Filter[];
   query?: Query;
-  searchSource?: SearchSourceContract;
+  searchSource?: ISearchSource;
 }
 
 /**

@@ -5,17 +5,20 @@
  */
 
 import {
+  EuiButtonIcon,
   EuiBasicTable,
   EuiFlexGroup,
-  EuiPanel,
-  EuiTitle,
-  EuiButtonIcon,
   EuiFlexItem,
+  EuiIcon,
+  EuiLink,
+  EuiPanel,
   EuiSpacer,
+  EuiTitle,
 } from '@elastic/eui';
 import { FormattedMessage } from '@kbn/i18n/react';
 import { get } from 'lodash';
 import React, { useState, Fragment } from 'react';
+import styled from 'styled-components';
 import { withUptimeGraphQL, UptimeGraphQLQueryProps } from '../../higher_order';
 import { monitorStatesQuery } from '../../../queries/monitor_states_query';
 import {
@@ -46,6 +49,12 @@ interface MonitorListProps {
 }
 
 type Props = UptimeGraphQLQueryProps<MonitorListQueryResult> & MonitorListProps;
+
+const TruncatedEuiLink = styled(EuiLink)`
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
 
 export const MonitorListComponent = (props: Props) => {
   const {
@@ -79,7 +88,7 @@ export const MonitorListComponent = (props: Props) => {
 
   const columns = [
     {
-      align: 'left',
+      align: 'left' as const,
       width: '20%',
       field: 'state.monitor.status',
       name: labels.STATUS_COLUMN_LABEL,
@@ -88,7 +97,7 @@ export const MonitorListComponent = (props: Props) => {
       },
     },
     {
-      align: 'left',
+      align: 'left' as const,
       width: '30%',
       field: 'state.monitor.name',
       name: labels.NAME_COLUMN_LABEL,
@@ -100,7 +109,17 @@ export const MonitorListComponent = (props: Props) => {
       sortable: true,
     },
     {
-      align: 'center',
+      aligh: 'left' as const,
+      field: 'state.url.full',
+      name: labels.URL,
+      render: (url: string, summary: MonitorSummary) => (
+        <TruncatedEuiLink href={url} target="_blank" color="text">
+          {url} <EuiIcon size="s" type="popout" color="subbdued" />
+        </TruncatedEuiLink>
+      ),
+    },
+    {
+      align: 'center' as const,
       field: 'histogram.points',
       name: labels.HISTORY_COLUMN_LABEL,
       mobileOptions: {
@@ -116,7 +135,7 @@ export const MonitorListComponent = (props: Props) => {
       ),
     },
     {
-      align: 'right',
+      align: 'right' as const,
       field: 'monitor_id',
       name: '',
       sortable: true,
