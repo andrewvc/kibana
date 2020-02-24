@@ -14,11 +14,16 @@ interface Props {
 }
 
 export const SnapshotHeading = ({ total }: Props) => {
-  const monitorsText = total === 1 ? 
-    i18n.translate('xpack.uptime.snapshot.monitor', {defaultMessage: 'Monitor'}) : 
-    i18n.translate('xpack.uptime.snapshot.monitors', {defaultMessage: 'Monitors'});
+  const monitorsText =
+    total === 1
+      ? i18n.translate('xpack.uptime.snapshot.monitor', { defaultMessage: 'Monitor' })
+      : i18n.translate('xpack.uptime.snapshot.monitors', { defaultMessage: 'Monitors' });
 
-  return <EuiTitle size="s">
-    <h2>{total} {monitorsText}</h2>
-  </EuiTitle>
+  return (
+    <EuiTitle size="s">
+      <h2>
+        {total} {monitorsText}
+      </h2>
+    </EuiTitle>
+  );
 };
