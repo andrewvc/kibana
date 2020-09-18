@@ -64,13 +64,14 @@ export const PingListExpandedRowComponent = ({ ping }: Props) => {
     });
   }
 
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(-1);
   // Show the journey
   const journeyItems =
-    ping.script?.journey?.steps?.map((s) => {
-      const onButtonClick = () => setIsPopoverOpen((isPopoverOpen) => !isPopoverOpen);
-      const closePopover = () => setIsPopoverOpen(false);
+    ping.script?.journey?.steps?.map((s, idx) => {
+      const onButtonClick = () => setIsPopoverOpen((isPopoverOpen) => idx);
+      const closePopover = () => setIsPopoverOpen(-1);
 
+      
       const thumbnail = (
         <img
           style={{ width: 'auto', height: 'auto', maxWidth: '150px', maxHeight: '150px' }}
@@ -79,7 +80,7 @@ export const PingListExpandedRowComponent = ({ ping }: Props) => {
         />
       );
       const description = (
-        <EuiPopover button={thumbnail} isOpen={isPopoverOpen} closePopover={closePopover}>
+        <EuiPopover button={thumbnail} isOpen={isPopoverOpen == idx} closePopover={closePopover}>
           <img
             style={{ width: '600px' }}
             src={'data:image/png;charset=utf-8;base64, ' + s.screenshot}
@@ -112,7 +113,7 @@ export const PingListExpandedRowComponent = ({ ping }: Props) => {
 
       return {
         title,
-        description,
+        description: (s.screenshot ? description : null),
       };
     }) ?? [];
   if (ping.script?.journey) {
