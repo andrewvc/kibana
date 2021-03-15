@@ -6,7 +6,7 @@
  */
 
 import { getFilterClause } from '../helper';
-import { HistogramResult, HistogramQueryResult } from '../../../common/runtime_types';
+import { HistogramResult } from '../../../common/runtime_types';
 import { QUERY } from '../../../common/constants';
 import { getHistogramInterval } from '../helper/get_histogram_interval';
 import { UMElasticsearchQueryFn } from '../adapters/framework';
@@ -71,31 +71,19 @@ export const getPingHistogram: UMElasticsearchQueryFn<
           missing: 0,
         },
         aggs: {
-          down: {
-            filter: {
-              term: {
-                'monitor.status': 'down',
-              },
-            },
-          },
-          up: {
-            filter: {
-              term: {
-                'monitor.status': 'up',
-              },
-            },
-          },
+          down: { sum: { field: 'summary.down' } },
+          up: { sum: { field: 'summary.up' } },
         },
       },
     },
   };
 
   const { body: result } = await uptimeEsClient.search({ body: params });
-  const buckets: HistogramQueryResult[] = result?.aggregations?.timeseries?.buckets ?? [];
+  const buckets = result?.aggregations?.timeseries?.buckets ?? [];
   const histogram = buckets.map((bucket) => {
     const x: number = bucket.key;
-    const downCount: number = bucket.down.doc_count;
-    const upCount: number = bucket.up.doc_count;
+    const downCount: number = bucket!.down!.value!;
+    const upCount: number = bucket!.up!.value!;
     return {
       x,
       downCount,

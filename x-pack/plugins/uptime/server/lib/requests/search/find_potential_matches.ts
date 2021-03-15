@@ -7,6 +7,7 @@
 
 import { set } from '@elastic/safer-lodash-set';
 import { QueryContext } from './query_context';
+import { MonitorSummary } from '../../../../common/runtime_types';
 
 /**
  * This is the first phase of the query. In it, we find all monitor IDs that have ever matched the given filters.
@@ -20,15 +21,50 @@ export const findPotentialMatches = async (
   size: number
 ) => {
   const { body: queryResult } = await query(queryContext, searchAfter, size);
-  const monitorIds: string[] = [];
 
-  (queryResult.aggregations?.monitors.buckets ?? []).forEach((b) => {
-    const monitorId = b.key.monitor_id;
-    monitorIds.push(monitorId as string);
+  const monitorSummaries: MonitorSummary[] = [];
+  (queryResult.aggregations?.monitors.buckets ?? []).forEach((bucket: any) => {
+    const monitorId = bucket.key.monitor_id;
+    const pings = bucket.geo.buckets.map((gb: any) => gb.top.hits.hits[0]);
+    pings.sort((a: any, b: any) => {
+      const aTs = a._source['@timestamp'];
+      const bTs = b._source['@timestamp'];
+
+      if (aTs < bTs) {
+        return 1;
+      } else if (bTs > aTs) {
+        return -1;
+      }
+      return 0;
+    });
+
+    const up = pings
+      .map((p: any) => p._source.summary.up)
+      .reduce((acc: number, v: number) => acc + v);
+    const down = pings
+      .map((p: any) => p._source.summary.down)
+      .reduce((acc: number, v: number) => acc + v);
+
+    const summary: MonitorSummary = {
+      monitor_id: monitorId,
+      state: {
+        timestamp: pings[0]._source['@timestamp'],
+        monitor: pings[0]._source.monitor,
+        url: pings[0]._source.url,
+        summary: {
+          up,
+          down,
+          status: down > 0 ? 'down' : 'up',
+        },
+        summaryPings: pings.map((p: any) => p._source),
+        observer: pings.map((p: any) => p.observer),
+      },
+    };
+    monitorSummaries.push(summary);
   });
 
   return {
-    monitorIds,
+    monitorSummaries,
     searchAfter: queryResult.aggregations?.monitors?.after_key,
   };
 };
@@ -45,8 +81,9 @@ const query = async (queryContext: QueryContext, searchAfter: any, size: number)
 
 const queryBody = async (queryContext: QueryContext, searchAfter: any, size: number) => {
   const filters = await queryContext.dateAndCustomFilters();
+  filters.push({ exists: { field: 'summary.up' } });
 
-  if (queryContext.statusFilter) {
+  if (queryContext.statusFilter && queryContext.query) {
     filters.push({ match: { 'monitor.status': queryContext.statusFilter } });
   }
 
@@ -80,6 +117,14 @@ const queryBody = async (queryContext: QueryContext, searchAfter: any, size: num
               monitor_id: { terms: { field: 'monitor.id', order: queryContext.cursorOrder() } },
             },
           ],
+        },
+        aggs: {
+          geo: {
+            terms: { field: 'observer.geo.name', missing: 'No Location Configured' },
+            aggs: {
+              top: { top_hits: { size: 1, sort: { '@timestamp': 'desc' } } },
+            },
+          },
         },
       },
     },

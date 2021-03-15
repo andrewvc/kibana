@@ -5,7 +5,6 @@
  * 2.0.
  */
 
-import { refinePotentialMatches } from './refine_potential_matches';
 import { findPotentialMatches } from './find_potential_matches';
 import { ChunkFetcher, ChunkResult } from './monitor_summary_iterator';
 import { QueryContext } from './query_context';
@@ -24,15 +23,20 @@ export const fetchChunk: ChunkFetcher = async (
   searchAfter: any,
   size: number
 ): Promise<ChunkResult> => {
-  const { monitorIds, searchAfter: foundSearchAfter } = await findPotentialMatches(
+  const { monitorSummaries, searchAfter: foundSearchAfter } = await findPotentialMatches(
     queryContext,
     searchAfter,
     size
   );
-  const matching = await refinePotentialMatches(queryContext, monitorIds);
 
-  return {
-    monitorSummaries: matching,
+  const result = {
+    monitorSummaries,
     searchAfter: foundSearchAfter,
   };
+  if (queryContext.statusFilter) {
+    result.monitorSummaries = result.monitorSummaries.filter(
+      (ms) => ms.state.summary.status === queryContext.statusFilter
+    );
+  }
+  return result;
 };
