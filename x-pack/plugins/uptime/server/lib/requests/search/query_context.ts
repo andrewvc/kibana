@@ -102,14 +102,11 @@ export class QueryContext {
     // behavior.
 
     const tsEnd = parseRelativeDate(this.dateRangeEnd, { roundUp: true })!;
-    const tsStart = moment(tsEnd).subtract(5, 'minutes');
+    const tsOffset = moment(tsEnd).subtract(30, 'seconds');
 
     return {
-      range: {
-        'monitor.timespan': {
-          gte: tsStart.toISOString(),
-          lte: tsEnd.toISOString(),
-        },
+      match: {
+        'monitor.timespan': tsOffset.toISOString(),
       },
     };
   }
@@ -119,16 +116,16 @@ export class QueryContext {
       return this.hasTimespanCache;
     }
 
+    const body = {
+      query: {
+        ...this.timespanClause(),
+      },
+    };
+
     this.hasTimespanCache =
       (
         await this.count({
-          body: {
-            query: {
-              bool: {
-                filter: [this.timespanClause()],
-              },
-            },
-          },
+          body,
           terminate_after: 1,
         })
       ).count > 0;
