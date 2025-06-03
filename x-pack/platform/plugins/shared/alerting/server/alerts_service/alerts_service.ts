@@ -22,6 +22,7 @@ import {
 } from './resource_installer_utils';
 import type {
   AlertInstanceContext,
+  AlertInstanceContextWithAiCase,
   AlertInstanceState,
   IRuleTypeAlerts,
   RuleAlertData,
@@ -104,7 +105,7 @@ interface IAlertsService {
   createAlertsClient<
     AlertData extends RuleAlertData,
     LegacyState extends AlertInstanceState,
-    LegacyContext extends AlertInstanceContext,
+    LegacyContext extends AlertInstanceContextWithAiCase,
     ActionGroupIds extends string,
     RecoveryActionGroupId extends string
   >(
@@ -159,7 +160,7 @@ export class AlertsService implements IAlertsService {
   public async createAlertsClient<
     AlertData extends RuleAlertData,
     LegacyState extends AlertInstanceState,
-    LegacyContext extends AlertInstanceContext,
+    LegacyContext extends AlertInstanceContextWithAiCase,
     ActionGroupIds extends string,
     RecoveryActionGroupId extends string
   >(

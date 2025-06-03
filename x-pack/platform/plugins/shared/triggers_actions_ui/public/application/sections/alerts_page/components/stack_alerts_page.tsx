@@ -7,7 +7,14 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { i18n } from '@kbn/i18n';
-import { EuiBetaBadge, EuiFlexGroup, EuiFlexItem, EuiPageTemplate, EuiSpacer } from '@elastic/eui';
+import {
+  EuiBetaBadge,
+  EuiFlexGroup,
+  EuiFlexItem,
+  EuiPageTemplate,
+  EuiSpacer,
+  EuiLink,
+} from '@elastic/eui';
 import {
   ALERT_STATUS,
   ALERT_STATUS_ACTIVE,
@@ -50,6 +57,7 @@ import {
 } from '../hooks/use_rule_type_ids_by_feature_id';
 import { TECH_PREVIEW_DESCRIPTION, TECH_PREVIEW_LABEL } from '../../translations';
 import { NON_SIEM_CONSUMERS } from '../../alerts_search_bar/constants';
+import { useHistory } from 'react-router-dom';
 
 /**
  * A unified view for all types of alerts
@@ -108,6 +116,9 @@ interface PageContentProps {
   authorizedToReadAnyRules: boolean;
   ruleTypeIdsByFeatureId: RuleTypeIdsByFeatureId;
 }
+
+const AI_CLASSIFICATION_FIELD = 'aiClassification';
+const CASE_ID_FIELD = 'caseId';
 
 const PageContentComponent: React.FC<PageContentProps> = ({
   isLoading,
@@ -216,6 +227,49 @@ const PageContentComponent: React.FC<PageContentProps> = ({
     selectedFilters.length,
   ]);
 
+  const history = useHistory();
+
+  // Add custom columns for AI Classification and Case Link
+  const customColumns = useMemo(
+    () => [
+      {
+        id: AI_CLASSIFICATION_FIELD,
+        displayAsText: i18n.translate(
+          'xpack.triggersActionsUI.sections.stackAlertsPage.aiClassificationColumn',
+          {
+            defaultMessage: 'AI Classification',
+          }
+        ),
+        isSortable: false,
+        actions: false,
+        render: (alert: any) => alert[AI_CLASSIFICATION_FIELD] || '-',
+      },
+      {
+        id: CASE_ID_FIELD,
+        displayAsText: i18n.translate(
+          'xpack.triggersActionsUI.sections.stackAlertsPage.caseIdColumn',
+          {
+            defaultMessage: 'Case',
+          }
+        ),
+        isSortable: false,
+        actions: false,
+        render: (alert: any) =>
+          alert[CASE_ID_FIELD] ? (
+            <EuiLink
+              data-test-subj="alert-case-link"
+              onClick={() => history.push(`/app/cases/${alert[CASE_ID_FIELD]}`)}
+            >
+              {alert[CASE_ID_FIELD]}
+            </EuiLink>
+          ) : (
+            '-'
+          ),
+      },
+    ],
+    [history]
+  );
+
   return (
     <>
       <EuiPageTemplate.Header
@@ -274,6 +328,7 @@ const PageContentComponent: React.FC<PageContentProps> = ({
               licensing,
               settings,
             }}
+            customColumns={customColumns}
           />
         </EuiFlexGroup>
       )}

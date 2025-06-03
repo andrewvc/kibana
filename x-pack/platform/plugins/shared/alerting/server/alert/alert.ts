@@ -190,6 +190,15 @@ export class Alert<
   }
 
   scheduleActions(actionGroup: ActionGroupIds, context: Context = {} as Context) {
+    // Example: inject AI/case fields if not present
+    if (context && typeof context === 'object') {
+      if (!('aiClassification' in context)) {
+        (context as any).aiClassification = undefined;
+      }
+      if (!('caseId' in context)) {
+        (context as any).caseId = undefined;
+      }
+    }
     this.ensureHasNoScheduledActions();
     this.setContext(context);
     this.scheduledExecutionOptions = {
@@ -224,7 +233,7 @@ export class Alert<
     this.meta.lastScheduledActions.group = group;
     this.meta.lastScheduledActions.date = date;
 
-    if (this.meta.lastScheduledActions.group !== group) {
+    if this.meta.lastScheduledActions.group !== group) {
       this.meta.lastScheduledActions.actions = {};
     } else if (uuid) {
       if (!this.meta.lastScheduledActions.actions) {

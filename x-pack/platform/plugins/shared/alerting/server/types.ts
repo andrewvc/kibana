@@ -57,6 +57,7 @@ import type { PublicAlertFactory } from './alert/create_alert_factory';
 import type { RulesSettingsFlappingProperties } from '../common/rules_settings';
 import type { PublicAlertsClient } from './alerts_client/types';
 import type { GetTimeRangeResult } from './lib/get_time_range';
+import type { AiCaseAlertContext } from '../common/alert_schema/ai_case_context';
 export type WithoutQueryAndParams<T> = Pick<T, Exclude<keyof T, 'query' | 'params'>>;
 export type SpaceIdToNamespaceFunction = (spaceId?: string) => string | undefined;
 export type { RuleTypeParams };
@@ -432,3 +433,8 @@ export type {
 } from './saved_objects/schemas/raw_rule';
 
 export type { DataStreamAdapter } from './alerts_service/lib/data_stream_adapter';
+
+/**
+ * AlertInstanceContext extended for AI classification and case linkage.
+ */
+export type AlertInstanceContextWithAiCase = AlertInstanceContext & AiCaseAlertContext;
